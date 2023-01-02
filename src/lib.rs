@@ -116,6 +116,15 @@ mod test {
         assert_eq!(contents.len(), MARY_DATA.len());
         assert_eq!(contents[..8], MARY_DATA[..8]);
 
+        // fetch (uppercase)
+        let mut contents: Vec<u8> = Vec::new();
+        let upper = digest.to_uppercase();
+        let result = blob_store.fetch(&upper, &mut contents);
+        assert!(result.is_ok());
+        assert!(result.unwrap());
+        assert_eq!(contents.len(), MARY_DATA.len());
+        assert_eq!(contents[..8], MARY_DATA[..8]);
+
         // delete
         let result = blob_store.delete(digest);
         assert!(result.is_ok());
