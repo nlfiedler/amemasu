@@ -21,7 +21,12 @@
 **** DONE route for =/status=
 **** DONE use HTTPS by default
 **** DONE add unit tests for http server
-**** TODO use =web.block()= when calling the repository methods
+**** DONE use =web.block()= when calling the repository methods
+**** DONE doc: using =RUST_LOG= to enable logging to stdout
+**** DONE doc: how to configure and start the HTTP/S server
+**** DONE doc: using =.env= file to configure the server
+**** DONE doc: how to use the REST API
+**** DONE doc: curl examples
 **** TODO optional authentication using JSON Web Tokens
 ***** if an issuer URI is configured, then JWT are expected
 ***** optional audience, tid, and iss to further restrict token access
@@ -32,30 +37,6 @@
 ***** c.f. https://crates.io/crates/actix-jwt-auth-middleware
 ***** c.f. https://crates.io/crates/actix-jwt-authc
 ***** problem with =josekit= is that it requires openssl
-**** TODO doc: using =RUST_LOG= to enable logging to stdout
-**** TODO doc: how to configure and start the HTTP/S server
-**** TODO doc: using =.env= file to configure the server
-| Name      | Description                         |
-|-----------+-------------------------------------|
-| HOST      | address on which to bind            |
-| PORT      | port on which to listen             |
-| BLOB_PATH | path to directory for storing blobs |
-| CERT_FILE |                                     |
-| KEY_FILE  |                                     |
-**** TODO doc: how to use the REST API
-**** TODO doc: curl examples
-***** put blob
-#+begin_src shell
-curl -F "file=@localfile;filename=digest" localhost:3000/blobs
-#+end_src
-***** get blob
-#+begin_src shell
-curl http://localhost:3000/blobs/<digest>
-#+end_src
-***** delete blob
-#+begin_src shell
-curl -X DELETE http://localhost:3000/blobs/<digest>
-#+end_src
 *** Packing objects to reduce disk usage
 **** TODO combine blobs into large ~pack~ files
 **** TODO blob delete results in a tombstone if blob is packed

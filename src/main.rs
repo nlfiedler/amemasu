@@ -32,28 +32,33 @@ static BLOB_PATH: Lazy<PathBuf> = Lazy::new(|| {
 });
 
 #[route("/blobs/{digest}", method = "GET", method = "HEAD")]
-async fn get_blob(path: web::Path<(String,)>) -> impl Responder {
+async fn get_blob(path: web::Path<(String,)>) -> Result<HttpResponse, actix_web::Error> {
     let (digest,) = path.into_inner();
     if Checksum::from_str(&digest).is_err() {
-        return HttpResponse::BadRequest().body("invalid checksum");
+        return Ok(HttpResponse::BadRequest().body("invalid checksum"));
     }
-    let mut contents: Vec<u8> = Vec::new();
-    let repository = BlobStore::new(&BLOB_PATH);
-    match repository.fetch(&digest, &mut contents) {
-        Ok(found) => {
-            if found {
-                HttpResponse::Ok()
+    let result: Result<Vec<u8>, Error> = web::block(move || {
+        let mut contents: Vec<u8> = Vec::new();
+        let repository = BlobStore::new(&BLOB_PATH);
+        repository.fetch(&digest, &mut contents)?;
+        Ok(contents)
+    })
+    .await?;
+    match result {
+        Ok(contents) => {
+            if contents.is_empty() {
+                Ok(HttpResponse::NotFound().finish())
+            } else {
+                Ok(HttpResponse::Ok()
                     .content_type("application/octet-stream")
                     .append_header((header::CONTENT_LENGTH, contents.len() as u64))
-                    .body(contents)
-            } else {
-                HttpResponse::NotFound().finish()
+                    .body(contents))
             }
         }
         Err(err) => {
             error!("get_blob: {:?}", err);
             let reason = format!("{:?}", err);
-            HttpResponse::InternalServerError().body(reason)
+            Ok(HttpResponse::InternalServerError().body(reason))
         }
     }
 }
@@ -87,18 +92,22 @@ async fn put_blob(mut payload: Multipart) -> Result<HttpResponse, actix_web::Err
 }
 
 #[route("/blobs/{digest}", method = "DELETE")]
-async fn del_blob(path: web::Path<(String,)>) -> impl Responder {
+async fn del_blob(path: web::Path<(String,)>) -> Result<HttpResponse, actix_web::Error> {
     let (digest,) = path.into_inner();
     if Checksum::from_str(&digest).is_err() {
-        return HttpResponse::BadRequest().body("invalid checksum");
+        return Ok(HttpResponse::BadRequest().body("invalid checksum"));
     }
-    let repository = BlobStore::new(&BLOB_PATH);
-    match repository.delete(&digest) {
-        Ok(_) => HttpResponse::Ok().finish(),
+    let result = web::block(move || {
+        let repository = BlobStore::new(&BLOB_PATH);
+        repository.delete(&digest)
+    })
+    .await?;
+    match result {
+        Ok(_) => Ok(HttpResponse::Ok().finish()),
         Err(err) => {
             error!("del_blob: {:?}", err);
             let reason = format!("{:?}", err);
-            HttpResponse::InternalServerError().body(reason)
+            Ok(HttpResponse::InternalServerError().body(reason))
         }
     }
 }
@@ -209,12 +218,16 @@ mod tests {
         let ct_header = format!("multipart/form-data; boundary={}", boundary);
         let filename = "./LICENSE";
         let raw_file = std::fs::read(filename).unwrap();
+        #[cfg(target_family = "unix")]
+        let license_sha1 = "49d32dbed9a10e78b6c0908a41f89437451879c4";
+        #[cfg(target_family = "windows")]
+        let license_sha1 = "84D3ACE37C8B34DCC87C2BDCAE72D764339786C7";
         let mut payload: Vec<u8> = Vec::new();
         let mut boundary_before = String::from("--");
         boundary_before.push_str(boundary);
         boundary_before.push_str("\r\nContent-Disposition: form-data;");
-        boundary_before
-            .push_str(r#" name="foo"; filename="sha1-84D3ACE37C8B34DCC87C2BDCAE72D764339786C7""#);
+        let filename = format!(r#" name="foo"; filename="sha1-{}""#, &license_sha1);
+        boundary_before.push_str(&filename);
         boundary_before.push_str("\r\nContent-Type: text/plain\r\n\r\n");
         payload.write(boundary_before.as_bytes()).unwrap();
         payload.write(&raw_file).unwrap();
@@ -231,19 +244,20 @@ mod tests {
         let resp = test::call_service(&mut app, req).await;
         assert!(resp.status().is_success());
 
+        #[cfg(target_family = "unix")]
+        let blob_path = "/blobs/sha1-49d32dbed9a10e78b6c0908a41f89437451879c4";
+        #[cfg(target_family = "windows")]
+        let blob_path = "/blobs/sha1-84d3ace37c8b34dcc87c2bdcae72d764339786c7";
+
         // test retrieval
         let app = test::init_service(App::new().service(get_blob)).await;
-        let req = test::TestRequest::get()
-            .uri("/blobs/sha1-84d3ace37c8b34dcc87c2bdcae72d764339786c7")
-            .to_request();
+        let req = test::TestRequest::get().uri(blob_path).to_request();
         let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status(), http::StatusCode::OK);
 
         // delete the blob
         let app = test::init_service(App::new().service(del_blob)).await;
-        let req = test::TestRequest::delete()
-            .uri("/blobs/sha1-84d3ace37c8b34DCC87c2BDCae72d764339786c7")
-            .to_request();
+        let req = test::TestRequest::delete().uri(blob_path).to_request();
         let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status(), http::StatusCode::OK);
     }
