@@ -9,6 +9,7 @@ use std::fmt;
 pub mod delete;
 pub mod fetch;
 pub mod store;
+pub mod validate;
 
 /// `UseCase` is the interface by which all use cases are invoked.
 pub trait UseCase<Type, Params> {

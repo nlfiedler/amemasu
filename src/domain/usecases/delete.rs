@@ -76,7 +76,7 @@ mod tests {
     fn test_delete_ok() {
         // arrange
         let mut blobs = MockBlobRepository::new();
-        blobs.expect_delete().return_once(move |_| Ok(()));
+        blobs.expect_delete().return_once(|_| Ok(()));
         // act
         let digest = Checksum::SHA1("9873bd2820da36edcc4f52e23b6b2e047257a4cd".into());
         let usecase = DeleteBlob::new(Arc::new(blobs));

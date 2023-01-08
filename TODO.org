@@ -1,43 +1,13 @@
 * Action Items
 ** Milestones
-*** Basic git-like blob store library
-**** API receives blob and hash digest with algorithm prefix
-**** supports SHA-1, SHA-224, and SHA-256 algorithms
-**** blob digest verified during store and fetch
-**** DONE usecase to store a blob
-**** DONE usecase to fetch a blob
-**** DONE usecase to delete a blob
-**** DONE basic file-based repository implementation
-**** DONE provide library-like API for blob access
-**** DONE provide examples in the =README.md=
-**** DONE create full examples
-*** HTTP/S server
-**** c.f. https://github.com/giuppep/rstr
-**** DONE set up logging
-**** DONE configure using =dotenv=
-**** DONE REST API to store a blob
-**** DONE REST API to fetch a blob
-**** DONE REST API to delete a blob
-**** DONE route for =/status=
-**** DONE use HTTPS by default
-**** DONE add unit tests for http server
-**** DONE use =web.block()= when calling the repository methods
-**** DONE doc: using =RUST_LOG= to enable logging to stdout
-**** DONE doc: how to configure and start the HTTP/S server
-**** DONE doc: using =.env= file to configure the server
-**** DONE doc: how to use the REST API
-**** DONE doc: curl examples
-**** TODO optional authentication using JSON Web Tokens
-***** if an issuer URI is configured, then JWT are expected
-***** optional audience, tid, and iss to further restrict token access
-****** that is, configured audience and/or tid and/or iss must match token
-***** JSON Web Token will contain =purpose= with either =read= or =write=
-***** JSON Web Token will validated against the configured issuer
-***** probably use =hyper= to get JWKS, =serde_json= to parse, =jsonwebtoken= to decode
-***** c.f. https://crates.io/crates/actix-jwt-auth-middleware
-***** c.f. https://crates.io/crates/actix-jwt-authc
-***** problem with =josekit= is that it requires openssl
+*** Better OpenID support
+**** TODO change =ISSUER_URI= to just =JWKS_URI= and do not append anything
+**** TODO support =ISSUER_URI= and retrieve =/.well-known/openid-configuration= to get =jwks_uri= value
 *** Packing objects to reduce disk usage
 **** TODO combine blobs into large ~pack~ files
 **** TODO blob delete results in a tombstone if blob is packed
 **** TODO function perform garbage collection (rebuild packs)
+*** Server-side encryption
+**** AWS S3 has had this for 10 years
+**** key management by the user?
+***** any key that changes will render old blobs unreadable

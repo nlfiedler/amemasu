@@ -1,11 +1,14 @@
 //
 // Copyright (c) 2022 Nathan Fiedler
 //
+use crate::data::sources::KeySetDataSource;
 use crate::domain::entities::{Blob, Checksum};
-use crate::domain::repositories::BlobRepository;
+use crate::domain::repositories::{BlobRepository, KeyRepository};
 use anyhow::{anyhow, Error};
+use jsonwebtoken::jwk::{Jwk, JwkSet};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 pub struct BlobRepositoryImpl {
     basepath: PathBuf,
@@ -64,9 +67,34 @@ impl BlobRepository for BlobRepositoryImpl {
     }
 }
 
+pub struct KeyRepositoryImpl {
+    keysource: Arc<dyn KeySetDataSource>,
+}
+
+impl KeyRepositoryImpl {
+    pub fn new(keysource: Arc<dyn KeySetDataSource>) -> Self {
+        Self { keysource }
+    }
+}
+
+impl KeyRepository for KeyRepositoryImpl {
+    fn find_key<'a>(&self, key_id: Option<&'a str>) -> Result<Option<Jwk>, Error> {
+        let raw_data = self.keysource.get_key_set()?;
+        let jwks: JwkSet = serde_json::from_str(&raw_data)?;
+        if let Some(kid) = key_id {
+            return Ok(jwks.find(kid).cloned());
+        }
+        if jwks.keys.len() > 0 {
+            return Ok(Some(jwks.keys[0].to_owned()));
+        }
+        Ok(None)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::data::sources::MockKeySetDataSource;
     use once_cell::sync::Lazy;
     use tempfile::tempdir;
 
@@ -168,5 +196,112 @@ mod test {
         assert!(result.is_ok());
         assert!(!dest_path.exists());
         std::fs::remove_dir_all(basepath).unwrap();
+    }
+
+    #[test]
+    fn test_key_fetch_err() {
+        // arrange
+        let mut mock = MockKeySetDataSource::new();
+        mock.expect_get_key_set()
+            .returning(move || Err(anyhow!("oh no")));
+        // act
+        let repo = KeyRepositoryImpl::new(Arc::new(mock));
+        let result = repo.find_key(None);
+        // assert
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_key_fetch_missing() {
+        // arrange
+        let raw_data = r#"{
+"keys": [
+    {
+    "alg": "RS256",
+    "kty": "RSA",
+    "use": "sig",
+    "x5c": [
+        "MIIC+DCCAeCgAwIBAgIJBIGjYW6hFpn2MA0GCSqGSIb3DQEBBQUAMCMxITAfBgNVBAMTGGN1c3RvbWVyLWRlbW9zLmF1dGgwLmNvbTAeFw0xNjExMjIyMjIyMDVaFw0zMDA4MDEyMjIyMDVaMCMxITAfBgNVBAMTGGN1c3RvbWVyLWRlbW9zLmF1dGgwLmNvbTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAMnjZc5bm/eGIHq09N9HKHahM7Y31P0ul+A2wwP4lSpIwFrWHzxw88/7Dwk9QMc+orGXX95R6av4GF+Es/nG3uK45ooMVMa/hYCh0Mtx3gnSuoTavQEkLzCvSwTqVwzZ+5noukWVqJuMKNwjL77GNcPLY7Xy2/skMCT5bR8UoWaufooQvYq6SyPcRAU4BtdquZRiBT4U5f+4pwNTxSvey7ki50yc1tG49Per/0zA4O6Tlpv8x7Red6m1bCNHt7+Z5nSl3RX/QYyAEUX1a28VcYmR41Osy+o2OUCXYdUAphDaHo4/8rbKTJhlu8jEcc1KoMXAKjgaVZtG/v5ltx6AXY0CAwEAAaMvMC0wDAYDVR0TBAUwAwEB/zAdBgNVHQ4EFgQUQxFG602h1cG+pnyvJoy9pGJJoCswDQYJKoZIhvcNAQEFBQADggEBAGvtCbzGNBUJPLICth3mLsX0Z4z8T8iu4tyoiuAshP/Ry/ZBnFnXmhD8vwgMZ2lTgUWwlrvlgN+fAtYKnwFO2G3BOCFw96Nm8So9sjTda9CCZ3dhoH57F/hVMBB0K6xhklAc0b5ZxUpCIN92v/w+xZoz1XQBHe8ZbRHaP1HpRM4M7DJk2G5cgUCyu3UBvYS41sHvzrxQ3z7vIePRA4WF4bEkfX12gvny0RsPkrbVMXX1Rj9t6V7QXrbPYBAO+43JvDGYawxYVvLhz+BJ45x50GFQmHszfY3BR9TPK8xmMmQwtIvLu1PMttNCs7niCYkSiUv2sc2mlq1i3IashGkkgmo="
+    ],
+    "n": "yeNlzlub94YgerT030codqEztjfU_S6X4DbDA_iVKkjAWtYfPHDzz_sPCT1Axz6isZdf3lHpq_gYX4Sz-cbe4rjmigxUxr-FgKHQy3HeCdK6hNq9ASQvMK9LBOpXDNn7mei6RZWom4wo3CMvvsY1w8tjtfLb-yQwJPltHxShZq5-ihC9irpLI9xEBTgG12q5lGIFPhTl_7inA1PFK97LuSLnTJzW0bj096v_TMDg7pOWm_zHtF53qbVsI0e3v5nmdKXdFf9BjIARRfVrbxVxiZHjU6zL6jY5QJdh1QCmENoejj_ytspMmGW7yMRxzUqgxcAqOBpVm0b-_mW3HoBdjQ",
+    "e": "AQAB",
+    "kid": "NjVBRjY5MDlCMUIwNzU4RTA2QzZFMDQ4QzQ2MDAyQjVDNjk1RTM2Qg",
+    "x5t": "NjVBRjY5MDlCMUIwNzU4RTA2QzZFMDQ4QzQ2MDAyQjVDNjk1RTM2Qg"
+    }
+]}"#;
+        let mut mock = MockKeySetDataSource::new();
+        mock.expect_get_key_set()
+            .returning(move || Ok(raw_data.into()));
+        // act
+        let repo = KeyRepositoryImpl::new(Arc::new(mock));
+        let result = repo.find_key(Some("notfound".into()));
+        // assert
+        assert!(result.is_ok());
+        let option = result.unwrap();
+        assert!(option.is_none());
+    }
+
+    #[test]
+    fn test_key_fetch_first() {
+        // arrange
+        let raw_data = r#"{
+"keys": [
+    {
+    "alg": "RS256",
+    "kty": "RSA",
+    "use": "sig",
+    "x5c": [
+        "MIIC+DCCAeCgAwIBAgIJBIGjYW6hFpn2MA0GCSqGSIb3DQEBBQUAMCMxITAfBgNVBAMTGGN1c3RvbWVyLWRlbW9zLmF1dGgwLmNvbTAeFw0xNjExMjIyMjIyMDVaFw0zMDA4MDEyMjIyMDVaMCMxITAfBgNVBAMTGGN1c3RvbWVyLWRlbW9zLmF1dGgwLmNvbTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAMnjZc5bm/eGIHq09N9HKHahM7Y31P0ul+A2wwP4lSpIwFrWHzxw88/7Dwk9QMc+orGXX95R6av4GF+Es/nG3uK45ooMVMa/hYCh0Mtx3gnSuoTavQEkLzCvSwTqVwzZ+5noukWVqJuMKNwjL77GNcPLY7Xy2/skMCT5bR8UoWaufooQvYq6SyPcRAU4BtdquZRiBT4U5f+4pwNTxSvey7ki50yc1tG49Per/0zA4O6Tlpv8x7Red6m1bCNHt7+Z5nSl3RX/QYyAEUX1a28VcYmR41Osy+o2OUCXYdUAphDaHo4/8rbKTJhlu8jEcc1KoMXAKjgaVZtG/v5ltx6AXY0CAwEAAaMvMC0wDAYDVR0TBAUwAwEB/zAdBgNVHQ4EFgQUQxFG602h1cG+pnyvJoy9pGJJoCswDQYJKoZIhvcNAQEFBQADggEBAGvtCbzGNBUJPLICth3mLsX0Z4z8T8iu4tyoiuAshP/Ry/ZBnFnXmhD8vwgMZ2lTgUWwlrvlgN+fAtYKnwFO2G3BOCFw96Nm8So9sjTda9CCZ3dhoH57F/hVMBB0K6xhklAc0b5ZxUpCIN92v/w+xZoz1XQBHe8ZbRHaP1HpRM4M7DJk2G5cgUCyu3UBvYS41sHvzrxQ3z7vIePRA4WF4bEkfX12gvny0RsPkrbVMXX1Rj9t6V7QXrbPYBAO+43JvDGYawxYVvLhz+BJ45x50GFQmHszfY3BR9TPK8xmMmQwtIvLu1PMttNCs7niCYkSiUv2sc2mlq1i3IashGkkgmo="
+    ],
+    "n": "yeNlzlub94YgerT030codqEztjfU_S6X4DbDA_iVKkjAWtYfPHDzz_sPCT1Axz6isZdf3lHpq_gYX4Sz-cbe4rjmigxUxr-FgKHQy3HeCdK6hNq9ASQvMK9LBOpXDNn7mei6RZWom4wo3CMvvsY1w8tjtfLb-yQwJPltHxShZq5-ihC9irpLI9xEBTgG12q5lGIFPhTl_7inA1PFK97LuSLnTJzW0bj096v_TMDg7pOWm_zHtF53qbVsI0e3v5nmdKXdFf9BjIARRfVrbxVxiZHjU6zL6jY5QJdh1QCmENoejj_ytspMmGW7yMRxzUqgxcAqOBpVm0b-_mW3HoBdjQ",
+    "e": "AQAB",
+    "kid": "NjVBRjY5MDlCMUIwNzU4RTA2QzZFMDQ4QzQ2MDAyQjVDNjk1RTM2Qg",
+    "x5t": "NjVBRjY5MDlCMUIwNzU4RTA2QzZFMDQ4QzQ2MDAyQjVDNjk1RTM2Qg"
+    }
+]}"#;
+        let mut mock = MockKeySetDataSource::new();
+        mock.expect_get_key_set()
+            .returning(move || Ok(raw_data.into()));
+        // act
+        let repo = KeyRepositoryImpl::new(Arc::new(mock));
+        let result = repo.find_key(None);
+        // assert
+        assert!(result.is_ok());
+        let option = result.unwrap();
+        assert!(option.is_some());
+        let jwk = option.unwrap();
+        assert_eq!(jwk.common.algorithm, Some(jsonwebtoken::Algorithm::RS256));
+    }
+
+    #[test]
+    fn test_key_fetch_match() {
+        // arrange
+        let raw_data = r#"{
+"keys": [
+    {
+    "alg": "RS256",
+    "kty": "RSA",
+    "use": "sig",
+    "x5c": [
+        "MIIC+DCCAeCgAwIBAgIJBIGjYW6hFpn2MA0GCSqGSIb3DQEBBQUAMCMxITAfBgNVBAMTGGN1c3RvbWVyLWRlbW9zLmF1dGgwLmNvbTAeFw0xNjExMjIyMjIyMDVaFw0zMDA4MDEyMjIyMDVaMCMxITAfBgNVBAMTGGN1c3RvbWVyLWRlbW9zLmF1dGgwLmNvbTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAMnjZc5bm/eGIHq09N9HKHahM7Y31P0ul+A2wwP4lSpIwFrWHzxw88/7Dwk9QMc+orGXX95R6av4GF+Es/nG3uK45ooMVMa/hYCh0Mtx3gnSuoTavQEkLzCvSwTqVwzZ+5noukWVqJuMKNwjL77GNcPLY7Xy2/skMCT5bR8UoWaufooQvYq6SyPcRAU4BtdquZRiBT4U5f+4pwNTxSvey7ki50yc1tG49Per/0zA4O6Tlpv8x7Red6m1bCNHt7+Z5nSl3RX/QYyAEUX1a28VcYmR41Osy+o2OUCXYdUAphDaHo4/8rbKTJhlu8jEcc1KoMXAKjgaVZtG/v5ltx6AXY0CAwEAAaMvMC0wDAYDVR0TBAUwAwEB/zAdBgNVHQ4EFgQUQxFG602h1cG+pnyvJoy9pGJJoCswDQYJKoZIhvcNAQEFBQADggEBAGvtCbzGNBUJPLICth3mLsX0Z4z8T8iu4tyoiuAshP/Ry/ZBnFnXmhD8vwgMZ2lTgUWwlrvlgN+fAtYKnwFO2G3BOCFw96Nm8So9sjTda9CCZ3dhoH57F/hVMBB0K6xhklAc0b5ZxUpCIN92v/w+xZoz1XQBHe8ZbRHaP1HpRM4M7DJk2G5cgUCyu3UBvYS41sHvzrxQ3z7vIePRA4WF4bEkfX12gvny0RsPkrbVMXX1Rj9t6V7QXrbPYBAO+43JvDGYawxYVvLhz+BJ45x50GFQmHszfY3BR9TPK8xmMmQwtIvLu1PMttNCs7niCYkSiUv2sc2mlq1i3IashGkkgmo="
+    ],
+    "n": "yeNlzlub94YgerT030codqEztjfU_S6X4DbDA_iVKkjAWtYfPHDzz_sPCT1Axz6isZdf3lHpq_gYX4Sz-cbe4rjmigxUxr-FgKHQy3HeCdK6hNq9ASQvMK9LBOpXDNn7mei6RZWom4wo3CMvvsY1w8tjtfLb-yQwJPltHxShZq5-ihC9irpLI9xEBTgG12q5lGIFPhTl_7inA1PFK97LuSLnTJzW0bj096v_TMDg7pOWm_zHtF53qbVsI0e3v5nmdKXdFf9BjIARRfVrbxVxiZHjU6zL6jY5QJdh1QCmENoejj_ytspMmGW7yMRxzUqgxcAqOBpVm0b-_mW3HoBdjQ",
+    "e": "AQAB",
+    "kid": "NjVBRjY5MDlCMUIwNzU4RTA2QzZFMDQ4QzQ2MDAyQjVDNjk1RTM2Qg",
+    "x5t": "NjVBRjY5MDlCMUIwNzU4RTA2QzZFMDQ4QzQ2MDAyQjVDNjk1RTM2Qg"
+    }
+]}"#;
+        let mut mock = MockKeySetDataSource::new();
+        mock.expect_get_key_set()
+            .returning(move || Ok(raw_data.into()));
+        // act
+        let repo = KeyRepositoryImpl::new(Arc::new(mock));
+        let result = repo.find_key(Some("NjVBRjY5MDlCMUIwNzU4RTA2QzZFMDQ4QzQ2MDAyQjVDNjk1RTM2Qg"));
+        // assert
+        assert!(result.is_ok());
+        let option = result.unwrap();
+        assert!(option.is_some());
+        let jwk = option.unwrap();
+        assert_eq!(jwk.common.algorithm, Some(jsonwebtoken::Algorithm::RS256));
     }
 }
