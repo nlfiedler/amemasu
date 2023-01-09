@@ -14,16 +14,19 @@ pub trait KeySetDataSource: Send + Sync {
     fn get_key_set(&self) -> Result<String, Error>;
 }
 
-/// Basic implementation that uses HTTP to retrieve the raw data.
+/// Basic implementation that uses HTTP to retrieve the raw data. Starts by
+/// fetching the well-known OpenID configuration to get the jwks_uri property,
+/// then fetches that data and returns it unparsed.
 pub struct KeySetDataSourceImpl {
-    issuer: String,
+    config_uri: String,
 }
 
 impl KeySetDataSourceImpl {
+    /// The `issuer` is the base URI of the OpenID provider.
     pub fn new(issuer: String) -> Self {
-        Self {
-            issuer: build_issuer_uri(&issuer),
-        }
+        let mut config_uri = issuer.trim_end_matches('/').to_owned();
+        config_uri.push_str("/.well-known/openid-configuration");
+        Self { config_uri }
     }
 }
 
@@ -32,20 +35,40 @@ impl KeySetDataSource for KeySetDataSourceImpl {
         // Bridge the sync/async chasm by spawning a thread to spawn a runtime
         // that will manage the future for us.
         let (tx, rx) = std::sync::mpsc::channel::<Result<String, Error>>();
-        let issuer = self.issuer.to_owned();
+        let config_uri = self.config_uri.to_owned();
         std::thread::spawn(move || {
-            tx.send(get_key_set_sync(&issuer)).unwrap();
+            tx.send(get_key_set_sync(&config_uri)).unwrap();
         });
         rx.recv()?
     }
 }
 
-async fn get_key_set(issuer: &str) -> Result<String, Error> {
+async fn get_key_set(config_uri: &str) -> Result<String, Error> {
     // Creating a client every time may seem wasteful, but we also just spawned
     // a thread and created a tokio runtime just to bridge the sync/async chasm.
     let https = HttpsConnector::new();
     let client = Client::builder().build::<_, hyper::Body>(https);
-    let uri = issuer.parse()?;
+
+    // fetch the openid configuration to get the jwks_uri
+    let uri = config_uri.parse()?;
+    let resp = client.get(uri).await?;
+    if resp.status() != 200 {
+        return Err(anyhow!("config request failed: {}", resp.status()));
+    }
+    let body = hyper::body::to_bytes(resp.into_body()).await?;
+    let buf = body.reader();
+    let raw_value: serde_json::Value = serde_json::from_reader(buf)?;
+    let configuration = raw_value
+        .as_object()
+        .ok_or_else(|| anyhow!("invalid configuration"))?;
+    let jwks_uri = configuration
+        .get("jwks_uri")
+        .ok_or_else(|| anyhow!("missing jwks_uri"))?
+        .as_str()
+        .ok_or_else(|| anyhow!("invalid jwks_uri"))?;
+
+    // fetch the jwks_uri contents and return as a string
+    let uri = jwks_uri.parse()?;
     let resp = client.get(uri).await?;
     if resp.status() != 200 {
         return Err(anyhow!("jwks request failed: {}", resp.status()));
@@ -56,8 +79,8 @@ async fn get_key_set(issuer: &str) -> Result<String, Error> {
     Ok(raw_data)
 }
 
-fn get_key_set_sync(issuer: &str) -> Result<String, Error> {
-    block_on(get_key_set(issuer)).and_then(std::convert::identity)
+fn get_key_set_sync(config_uri: &str) -> Result<String, Error> {
+    block_on(get_key_set(config_uri)).and_then(std::convert::identity)
 }
 
 /// Run the given future on a newly created single-threaded runtime if possible,
@@ -74,16 +97,6 @@ fn block_on<F: core::future::Future>(future: F) -> Result<F::Output, Error> {
             .enable_all()
             .build()?;
         Ok(runtime.block_on(future))
-    }
-}
-
-fn build_issuer_uri(issuer: &str) -> String {
-    if issuer.ends_with("/.well-known/jwks.json") {
-        issuer.to_owned()
-    } else if issuer.ends_with("/") {
-        issuer.to_owned() + ".well-known/jwks.json"
-    } else {
-        issuer.to_owned() + "/.well-known/jwks.json"
     }
 }
 
@@ -111,21 +124,5 @@ mod test {
             let raw_data = result.unwrap();
             assert!(raw_data.contains("RS256"));
         }
-    }
-
-    #[test]
-    fn test_build_issuer_uri() {
-        assert_eq!(
-            build_issuer_uri("localhost"),
-            "localhost/.well-known/jwks.json"
-        );
-        assert_eq!(
-            build_issuer_uri("localhost/"),
-            "localhost/.well-known/jwks.json"
-        );
-        assert_eq!(
-            build_issuer_uri("localhost/.well-known/jwks.json"),
-            "localhost/.well-known/jwks.json"
-        );
     }
 }

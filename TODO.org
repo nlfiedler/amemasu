@@ -1,12 +1,9 @@
 * Action Items
 ** Milestones
-*** Better OpenID support
-**** TODO change =ISSUER_URI= to just =JWKS_URI= and do not append anything
-**** TODO support =ISSUER_URI= and retrieve =/.well-known/openid-configuration= to get =jwks_uri= value
 *** Packing objects to reduce disk usage
-**** TODO combine blobs into large ~pack~ files
-**** TODO blob delete results in a tombstone if blob is packed
-**** TODO function perform garbage collection (rebuild packs)
+**** combine blobs into large ~pack~ files
+**** blob delete results in a tombstone if blob is packed
+**** provide function to perform garbage collection
 *** Server-side encryption
 **** AWS S3 has had this for 10 years
 **** key management by the user?

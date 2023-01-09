@@ -1,6 +1,6 @@
 # Amemasu
 
-This crate implements a simple blob store. Clients will compute the hash digest and provide it along with the file content. The store will verify the digest both on write and later when retrieving the blob using the same digest.
+This crate implements a simple blob store. Clients will compute the hash digest and provide it along with the file content. The blob store will verify the digest both on write and later when retrieving the blob using the same digest. Optional authorization can be enabled in which JSON Web Tokens (JWT, [RFC 7519](https://www.rfc-editor.org/rfc/rfc7519)) are received and verified against an OpenID provider's JSON Web Key Set (JWKS, [RFC 7517](https://www.rfc-editor.org/rfc/rfc7517)).
 
 ## Requirements
 
@@ -9,17 +9,16 @@ This crate implements a simple blob store. Clients will compute the hash digest 
 ## Building and Testing
 
 ```shell
-$ cargo clean
 $ cargo build
 $ cargo test
 ```
 
-### Testing JWKS support
+### Testing authorization support
 
-Some of the test cases involve making a request for the JWKS, which are only enabled if the `ISSUER_URI` environment variable is set and points to a JWKS server. Such a server is readily available via the `jwt-test-server` docker image. In the example below, the `http://192.168.1.3` address refers to the docker host.
+Some of the test cases involve making a request for the configuration and key set from an OpenID provider, which are only enabled if the `ISSUER_URI` environment variable is set. Such a server is readily available via the `jwt-test-server` docker image ([git repo](https://github.com/nlfiedler/jwt-test-server)). In the example below, the `http://192.168.1.3` address refers to the docker host. Note that the `hyper` crate used by this application will not accept self-signed certificates, so starting the fake provider with `http` is necessary.
 
 ```shell
-docker run -d -p 3000:3000 -e PROTOCOL=http -e BASE_URI=http://192.168.1.3:3000 --name jwt-test-server jwt-test-server:latest
+docker run -d -p 3000:3000 -e PROTOCOL=http -e BASE_URI=http://192.168.1.3:3000 --name jwt-test-server nlfiedler/jwt-test-server:latest
 ```
 
 Running the tests would then look like:
@@ -30,7 +29,7 @@ env ISSUER_URI=http://192.168.1.3:3000 cargo test
 
 ## Example Usage
 
-An example can be found in the `examples` directory of the source repository, which demonstrates storing and retrieving blobs.
+An example of using this crate as a library can be found in the `examples` directory of the source repository, which demonstrates storing and retrieving blobs.
 
 ```shell
 $ cargo run --example blobby -- put --file README.md
@@ -77,13 +76,13 @@ repo.delete(&digest)?;
 
 ## Running as a server
 
-The binary form of `amemasu` will start an web server serving requests over HTTPS.
+The binary form of `amemasu` will start an HTTP/S server. Depending on the configuration, it may require authorization for any `/blob` requests.
 
 ### Configuring
 
-By default the server will bind to the local address and listen on port 3000. No authentication is required for any of the operations, unless `ISSUER_URI` is set.
+By default the server will bind to the local address and listen on port 3000. No authorization is required for any of the operations, unless `ISSUER_URI` is set.
 
-To modify the configuration, set any of the environment variables shown in the table below. The server will look for a file named `.env` and evaluate it using the `dotenv` crate. Any `name=value` pairs defined in that file will result in setting the named environment variable with the given value. Comment lines, which start with `#`, and blank lines, will be ignored.
+To modify the configuration, set any of the environment variables shown in the table below. The server will look for a file named `.env` and evaluate it using the `dotenv` crate. Any `name=value` pairs defined in that file will result in setting the named environment variable with the given value. Comment lines, which start with `#`, as well as blank lines, will be ignored.
 
 | Name | Description | Default Value |
 | ---- | ----------- | ------------- |
@@ -93,23 +92,23 @@ To modify the configuration, set any of the environment variables shown in the t
 | `BLOB_PATH` | path to directory for storing blobs | `tmp/blobs` |
 | `CERT_FILE` | path of PEM-encoded file containing public certificate | `certs/cert.pem` |
 | `KEY_FILE` | path of PEM-encoded file containing private key | `certs/key.pem` |
-| `ISSUER_URI` | URL of the JWKS server (`/.well-known/jwks.json` will be appended if not present) | _none_ |
-| `AUDIENCE` | optional `aud` value by which to restrict JWT | _none_ |
-| `JWKS_KEYID` | optional `kid` value for selecting allowed JWK from the JWKS | _none_ |
+| `ISSUER_URI` | URI of the OpenID provider | _none_ |
+| `AUDIENCE` | optional `aud` value by which to restrict access | _none_ |
+| `JWKS_KEYID` | optional `kid` value for selecting allowed keys | _none_ |
 
 ### Authorization
 
-Normally the server will not require any authentication/authorization to perform all operations. However, if the `ISSUER_URI` environment variable is defined and points to a server that provides a JSON Web Key Set (JWKS, [RFC 7517](https://www.rfc-editor.org/rfc/rfc7517)), then all `/blobs` requests will require a JSON Web Token via the `Authorization` HTTP header (c.f. [RFC 6750](https://www.rfc-editor.org/rfc/rfc6750)). The JWT will be validated against the JWKS served by the `ISSUER_URI`; additionally the returned set of claims must have a `purpose` field that is either `read` or `write`. Blob operations that make modifications require `write` access (`PUT /blobs` and `DEL /blobs`) while the read operation (`GET /blobs`) requires either `read` or `write` access.
+Normally the server will not require any authorization to perform `/blob` operations. However, if the `ISSUER_URI` environment variable is defined, then all `/blobs` requests will require a JSON Web Token via the `Authorization` HTTP header (see [RFC 6750](https://www.rfc-editor.org/rfc/rfc6750)). The token will be validated against the key set served by the provider; additionally the token payload must have a `purpose` claim that is either `read` or `write`. Blob operations that make modifications require `write` access (`PUT /blobs` and `DELETE /blobs`) while the read operation (`GET /blobs`) will accept either `read` or `write` access.
 
-At this time, the only supported key encryption algorithm is `RS256`, meaning that a public/private key pair is used to sign and validate the token.
+At this time, the only supported key encryption algorithm is `RS256`, meaning that a public/private key pair must be used to sign and validate the token.
 
-In addition to validating the JWT against the JWKS, an audience value can be provided via the `AUDIENCE` environment variable, further restricting access to tokens that have a matching `aud` claim in the token payload.
+In addition to validating the token against the key set, an audience value can be provided via the `AUDIENCE` environment variable, further restricting access to tokens that have a matching `aud` claim in the token payload.
 
-By default, the server will take the first key in the JWKS to validate the token, but this can be restricted to a specific key by setting the `JWKS_KEYID` environment variable. Note that at this time, the server does not try all of the keys offered in the JWKS, nor does it consider the `kid` from the token header itself.
+By default, the server will take the first key in the key set to validate the token, but this can be restricted to a specific key by setting the `JWKS_KEYID` environment variable. Note that at this time, the server does not try all of the keys offered in the set, nor does it consider the `kid` from the token header.
 
 ### Certificates
 
-The default self-signed TLS certificates in the `certs` directory, `cert.pem` and `key.pem`, where created using the [mkcert](https://github.com/FiloSottile/mkcert) utility, although `openssl` would also work. The advantage of `mkcert` is that it will install certificate authority certs to validate the certs created with `mkcert`.
+The default self-signed TLS certificates in the `certs` directory, `cert.pem` and `key.pem`, were created using the [mkcert](https://github.com/FiloSottile/mkcert) utility, although `openssl` would also work. The advantage of `mkcert` is that it will install certificate authority certs to validate the certs created with `mkcert`.
 
 ### Storing a blob
 
