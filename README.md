@@ -44,10 +44,10 @@ stored blob with digest: sha256-b8d6810ab4b5cd71a96c0123ec2da129f35347ded0a69650
 ```rust
 let repo = BlobStore::new(Path::new("blobs"));
 let mut source = fs::File::open("blobby.txt")?;
-let mut hasher = Sha256::new();
+let mut hasher = Sha1::new();
 io::copy(&mut source, &mut hasher)?;
 let hash = hasher.finalize();
-let digest = format!("sha256-{:x}", hash);
+let digest = format!("sha1-{:x}", hash);
 source = fs::File::open(infile)?;
 repo.store(&digest, &mut source)?;
 ```
