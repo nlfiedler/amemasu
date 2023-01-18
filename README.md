@@ -15,16 +15,16 @@ $ cargo test
 
 ### Testing authorization support
 
-Some of the test cases involve making a request for the configuration and key set from an OpenID provider, which are only enabled if the `ISSUER_URI` environment variable is set. Such a server is readily available via the `jwt-test-server` docker image ([git repo](https://github.com/nlfiedler/jwt-test-server)). In the example below, the `http://192.168.1.3` address refers to the docker host. Note that the `hyper` crate used by this application will not accept self-signed certificates, so starting the fake provider with `http` is necessary.
+Some of the test cases involve making a request for the configuration and key set from an OpenID provider, and these are only enabled if the `ISSUER_URI` environment variable is set. Such a server is readily available via the `jwt-test-server` docker image ([git repo](https://github.com/nlfiedler/jwt-test-server)). In the example below, the `http://192.168.1.3` address refers to the docker host. Note that the `hyper` crate used by this application will not accept self-signed certificates, so starting the fake provider with `http` is necessary.
 
 ```shell
-docker run -d -p 3000:3000 -e PROTOCOL=http -e BASE_URI=http://192.168.1.3:3000 --name jwt-test-server nlfiedler/jwt-test-server:latest
+docker run -d -p 8108:3000 -e PROTOCOL=http -e BASE_URI=http://192.168.1.3:8108 --name jwt-test-server nlfiedler/jwt-test-server:latest
 ```
 
 Running the tests would then look like:
 
 ```shell
-env ISSUER_URI=http://192.168.1.3:3000 cargo test
+env ISSUER_URI=http://192.168.1.3:8108 cargo test
 ```
 
 ## Example Usage
