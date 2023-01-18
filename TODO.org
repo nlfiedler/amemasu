@@ -4,7 +4,11 @@
 **** combine blobs into large ~pack~ files
 **** blob delete results in a tombstone if blob is packed
 **** provide function to perform garbage collection
+**** c.f. http://shafiul.github.io/gitbook/7_the_packfile.html
+**** index is for quickly finding a blob, nothing more
 *** Server-side encryption
-**** AWS S3 has had this for 10 years
-**** key management by the user?
-***** any key that changes will render old blobs unreadable
+**** Amazon Web Services offers this with S3
+**** seemingly creates encryption keys for each bucket
+**** c.f. https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucket-encryption.html
+**** probably necessary because S3 objects are often publicly visible
+**** keys and blobs cannot be stored on the same system, making this difficult
