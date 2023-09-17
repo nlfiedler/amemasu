@@ -26,7 +26,7 @@ impl ValidateToken {
 
 impl super::UseCase<Option<String>, Params> for ValidateToken {
     fn call(&self, params: Params) -> Result<Option<String>, Error> {
-        if let Some(jwk) = self.keys.find_key(params.key_id.as_ref().map(|x| &**x))? {
+        if let Some(jwk) = self.keys.find_key(params.key_id.as_deref())? {
             let decoder = DecodingKey::from_jwk(&jwk)?;
             let mut validation = Validation::new(Algorithm::RS256);
             if let Some(aud) = params.audience {

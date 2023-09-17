@@ -103,12 +103,12 @@ impl FromStr for Checksum {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let lower = s.to_owned().to_lowercase();
-        if lower.starts_with("sha1-") {
-            Ok(Checksum::SHA1(lower[5..].to_owned()))
-        } else if lower.starts_with("sha224-") {
-            Ok(Checksum::SHA224(lower[7..].to_owned()))
-        } else if lower.starts_with("sha256-") {
-            Ok(Checksum::SHA256(lower[7..].to_owned()))
+        if let Some(hash) = lower.strip_prefix("sha1-") {
+            Ok(Checksum::SHA1(hash.to_owned()))
+        } else if let Some(hash) = lower.strip_prefix("sha224-") {
+            Ok(Checksum::SHA224(hash.to_owned()))
+        } else if let Some(hash) = lower.strip_prefix("sha256-") {
+            Ok(Checksum::SHA256(hash.to_owned()))
         } else {
             Err(anyhow!(format!("unsupported algorithm: {}", s)))
         }

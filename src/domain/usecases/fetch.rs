@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2023 Nathan Fiedler
 //
 use crate::domain::entities::{Blob, Checksum};
 use crate::domain::repositories::BlobRepository;
@@ -19,8 +19,8 @@ impl FetchBlob {
     }
 }
 
-impl<'a, 'b> super::UseCase<Option<Blob<'b>>, Params> for FetchBlob {
-    fn call(&self, params: Params) -> Result<Option<Blob<'b>>, Error> {
+impl<'a> super::UseCase<Option<Blob<'a>>, Params> for FetchBlob {
+    fn call(&self, params: Params) -> Result<Option<Blob<'a>>, Error> {
         let maybe_blob = self.blobs.fetch(&params.digest)?;
         if let Some(ref blob) = maybe_blob {
             if !verify_digest(blob)? {

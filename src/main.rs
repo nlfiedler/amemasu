@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2023 Nathan Fiedler
 //
 use actix_multipart::Multipart;
 use actix_web::{
@@ -108,7 +108,7 @@ async fn put_blob(mut payload: Multipart) -> Result<HttpResponse, actix_web::Err
         let disposition = field.content_disposition();
         let hash_digest = disposition
             .get_filename()
-            .ok_or_else(|| actix_web::error::ContentTypeError::ParseError)?
+            .ok_or(actix_web::error::ContentTypeError::ParseError)?
             .to_owned();
         let mut bytes: Vec<u8> = Vec::new();
         while let Some(chunk) = field.try_next().await? {
@@ -253,7 +253,7 @@ fn load_rustls_config() -> Result<rustls::ServerConfig, Error> {
 
 fn config(cfg: &mut web::ServiceConfig) {
     // authenticated routes are enabled if ISSUER_URI is configured
-    if let Ok(_) = env::var("ISSUER_URI") {
+    if env::var("ISSUER_URI").is_ok() {
         cfg.service(get_blob_auth)
             .service(put_blob_auth)
             .service(del_blob_auth)

@@ -78,13 +78,13 @@ impl KeyRepositoryImpl {
 }
 
 impl KeyRepository for KeyRepositoryImpl {
-    fn find_key<'a>(&self, key_id: Option<&'a str>) -> Result<Option<Jwk>, Error> {
+    fn find_key(&self, key_id: Option<&str>) -> Result<Option<Jwk>, Error> {
         let raw_data = self.keysource.get_key_set()?;
         let jwks: JwkSet = serde_json::from_str(&raw_data)?;
         if let Some(kid) = key_id {
             return Ok(jwks.find(kid).cloned());
         }
-        if jwks.keys.len() > 0 {
+        if !jwks.keys.is_empty() {
             return Ok(Some(jwks.keys[0].to_owned()));
         }
         Ok(None)

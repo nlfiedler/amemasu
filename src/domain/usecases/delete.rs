@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2023 Nathan Fiedler
 //
 use crate::domain::entities::Checksum;
 use crate::domain::repositories::BlobRepository;
@@ -18,7 +18,7 @@ impl DeleteBlob {
     }
 }
 
-impl<'b> super::UseCase<(), Params> for DeleteBlob {
+impl super::UseCase<(), Params> for DeleteBlob {
     fn call(&self, params: Params) -> Result<(), Error> {
         self.blobs.delete(&params.digest)
     }
