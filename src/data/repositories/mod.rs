@@ -270,7 +270,7 @@ mod test {
         let option = result.unwrap();
         assert!(option.is_some());
         let jwk = option.unwrap();
-        assert_eq!(jwk.common.algorithm, Some(jsonwebtoken::Algorithm::RS256));
+        assert_eq!(jwk.common.key_algorithm, Some(jsonwebtoken::jwk::KeyAlgorithm::RS256));
     }
 
     #[test]
@@ -302,6 +302,6 @@ mod test {
         let option = result.unwrap();
         assert!(option.is_some());
         let jwk = option.unwrap();
-        assert_eq!(jwk.common.algorithm, Some(jsonwebtoken::Algorithm::RS256));
+        assert_eq!(jwk.common.key_algorithm, Some(jsonwebtoken::jwk::KeyAlgorithm::RS256));
     }
 }
