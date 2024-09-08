@@ -1,11 +1,12 @@
 * Action Items
 ** Milestones
 *** Packing objects to reduce disk usage
-**** combine blobs into large ~pack~ files
-**** blob delete results in a tombstone if blob is packed
-**** provide function to perform garbage collection
-**** c.f. http://shafiul.github.io/gitbook/7_the_packfile.html
-**** index is for quickly finding a blob, nothing more
+**** combine blobs into compressed ~pack~ files once there are many loose blob files
+**** deleting a blob results in a tombstone if blob is packed
+**** provide function to perform garbage collection (repacking)
+**** use =exaf-rs= for the container format
+**** use RocksDB or SQLite as index of blobs to pack files, tombstones
+**** cache frequently accessed (packed) blobs in memory
 *** Server-side encryption
 **** Amazon Web Services offers this with S3
 **** seemingly creates encryption keys for each bucket

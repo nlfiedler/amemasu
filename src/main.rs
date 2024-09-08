@@ -107,6 +107,7 @@ async fn put_blob(mut payload: Multipart) -> Result<HttpResponse, actix_web::Err
     while let Ok(Some(mut field)) = payload.try_next().await {
         let disposition = field.content_disposition();
         let hash_digest = disposition
+            .ok_or(actix_web::error::ContentTypeError::ParseError)?
             .get_filename()
             .ok_or(actix_web::error::ContentTypeError::ParseError)?
             .to_owned();

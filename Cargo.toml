@@ -12,7 +12,7 @@ default-run = "amemasu"
 exclude = ["TODO.org", "test/*"]
 
 [dependencies]
-actix-multipart = "0.6.1"
+actix-multipart = "0.7.2"
 actix-web = { version = "4.5.1", features = ["rustls"] }
 actix-web-httpauth = "0.8.0"
 anyhow = "1.0.68"
@@ -35,5 +35,5 @@ tokio = { version = "1.23.0", features = ["full"] }
 
 [dev-dependencies]
 clap = { version = "4.0.32", features = ["derive"] }
-mockall = "0.12.1"
+mockall = "0.13.0"
 tempfile = "3.3.0"
