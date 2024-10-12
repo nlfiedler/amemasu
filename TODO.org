@@ -1,12 +1,23 @@
 * Action Items
+** TODO replace =hyper= with =reqwest=
+** TODO add blake3 support for blob checksums
 ** Milestones
 *** Packing objects to reduce disk usage
+**** should be configurable, not obvious that this is always a good idea
 **** combine blobs into compressed ~pack~ files once there are many loose blob files
+**** track loose blobs with in-memory counter; on startup, count loose files
 **** deleting a blob results in a tombstone if blob is packed
 **** provide function to perform garbage collection (repacking)
+- iterate all packs, moving blobs into new packs
 **** use =exaf-rs= for the container format
-**** use RocksDB or SQLite as index of blobs to pack files, tombstones
+***** need API for extracting a single entry by relative path within archive
+**** use SQLite to map blob checksums to pack files
+- if row exists, blob is packed
+- row contains column for hash/name of pack
+- row contains column for deleted flag (tombstone)
 **** cache frequently accessed (packed) blobs in memory
+**** function to rebuild blob index as needed
+- iterate all pack files, build database table
 *** Server-side encryption
 **** Amazon Web Services offers this with S3
 **** seemingly creates encryption keys for each bucket
